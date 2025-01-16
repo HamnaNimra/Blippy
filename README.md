@@ -29,7 +29,7 @@ Blippy is an AI-powered chatbot built using OpenAI's GPT-3.5-turbo model. It all
     ```
 
 3. Get OpenAI API Key
-- Go to [OpenAI API](https://platform.openai.com/docs/overview) and log in or sign up.
+- Go to [OpenAI API](https://platform.openai.com/) and log in or sign up.
 - Generate an API key.
 - Create a .env file in your project folder and add your key:
 
