@@ -30,7 +30,7 @@ def save_memory(memory):
         print(f"Unexpected error while saving memory: {e}")
 
 # Ensure memory is loaded at the start
-memory = load_memory()  
+memory = load_memory()
 
 # Chat function with memory
 def chat_with_gpt(prompt, user_id="default"):
@@ -71,6 +71,12 @@ def start_chat():
     print("Hi! I'm Blippy with memory now. Type 'quit' to exit.")
     user_id = input("What's your name? ")
     
+    # Save user name in memory
+    if user_id not in memory:
+        memory[user_id] = {"name": user_id, "chat_history": []}  # Store name and initialize empty chat history
+        save_memory(memory)
+        print(f"Nice to meet you, {user_id}!")
+
     # Adding functionality to ensure memory is saved even if no chat occurs
     while True:
         user_input = input("You: ")
