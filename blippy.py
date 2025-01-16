@@ -1,11 +1,11 @@
-import openai
+from openai import OpenAI
 import os
 import json
 from dotenv import load_dotenv
 
 # Load API key from .env
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Load or initialize memory
 def load_memory():
@@ -23,28 +23,36 @@ memory = load_memory()
 # Chat function with memory
 def chat_with_gpt(prompt, user_id="default"):
     user_memory = memory.get(user_id, [])
-    conversation_history = "\n".join(user_memory[-5:])  # Use last 5 messages
-    
-    full_prompt = f"{conversation_history}\nUser: {prompt}\nBlippy:"
+    conversation_history = [{"role": "system", "content": "You are a helpful AI assistant."}]
+
+    # Add past conversation to the history
+    for i in user_memory[-5:]:  # Last 5 messages
+        role, content = i.split(":", 1)
+        conversation_history.append({"role": role.strip().lower(), "content": content.strip()})
+
+    # Add the new user input
+    conversation_history.append({"role": "user", "content": prompt})
 
     try:
-        response = openai.Completion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            prompt=full_prompt,
-            max_tokens=150,
+            messages=conversation_history,
+            max_tokens=50,
             temperature=0.7
         )
-        reply = response.choices[0].text.strip()
-        
-        # Update memory
+        reply = response.choices[0].message.content.strip()
+
+        # Save the latest conversation
         user_memory.append(f"User: {prompt}")
-        user_memory.append(f"Blippy: {reply}")
+        user_memory.append(f"Assistant: {reply}")
         memory[user_id] = user_memory
         save_memory(memory)
-        
+
         return reply
+
     except Exception as e:
         return f"Error: {e}"
+
 
 # Chat loop
 def start_chat():
