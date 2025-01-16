@@ -9,16 +9,28 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Load or initialize memory
 def load_memory():
+    print("Loading memory...")  # Debugging message
     if os.path.exists("memory.json"):
-        with open("memory.json", "r") as file:
-            return json.load(file)
+        try:
+            with open("memory.json", "r") as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            print("Error decoding JSON from memory.json. Returning an empty memory.")
+            return {}
     return {}
 
 def save_memory(memory):
-    with open("memory.json", "w") as file:
-        json.dump(memory, file, indent=4)
+    try:
+        with open("memory.json", "w") as file:
+            json.dump(memory, file, indent=4)
+            print("Memory saved successfully.")  # Debugging message
+    except IOError as e:
+        print(f"Error saving memory: {e}")
+    except Exception as e:
+        print(f"Unexpected error while saving memory: {e}")
 
-memory = load_memory()
+# Ensure memory is loaded at the start
+memory = load_memory()  
 
 # Chat function with memory
 def chat_with_gpt(prompt, user_id="default"):
@@ -58,13 +70,18 @@ def chat_with_gpt(prompt, user_id="default"):
 def start_chat():
     print("Hi! I'm Blippy with memory now. Type 'quit' to exit.")
     user_id = input("What's your name? ")
+    
+    # Adding functionality to ensure memory is saved even if no chat occurs
     while True:
         user_input = input("You: ")
         if user_input.lower() == "quit":
             print("Blippy: Bye! I'll remember this chat!")
+            save_memory(memory)  # Save memory before quitting
             break
         response = chat_with_gpt(user_input, user_id)
         print(f"Blippy: {response}")
 
 if __name__ == "__main__":
+    # Check if the script can access the current directory and write to it
+    print(f"Current working directory: {os.getcwd()}")  # Debugging message
     start_chat()
