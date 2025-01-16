@@ -18,8 +18,8 @@ Blippy is an AI-powered chatbot built using OpenAI's GPT-3.5-turbo model. It all
 1. Clone this repository:
 
     ```bash
-    git clone <repository-url>
-    cd <repository-folder>
+    git clone https://github.com/HamnaNimra/Blippy.git
+    cd Blippy
     ```
 
 2. Install dependencies:
@@ -28,7 +28,10 @@ Blippy is an AI-powered chatbot built using OpenAI's GPT-3.5-turbo model. It all
     pip install -r requirements.txt
     ```
 
-3. Create a `.env` file in the root of the project and add your OpenAI API key:
+3. Get OpenAI API Key
+    a. Go to OpenAI API and log in or sign up.
+    b. Generate an API key.
+    c. Create a .env file in your project folder and add your key:
 
     ```
     OPENAI_API_KEY=your-api-key-here
