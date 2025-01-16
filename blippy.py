@@ -32,6 +32,16 @@ def save_memory(memory):
 # Ensure memory is loaded at the start
 memory = load_memory()
 
+# AI Decision Logic for Saving Memory
+def should_save_message(prompt, user_id):
+    # Basic logic to decide whether to save the message
+    # For example, only save if the message is a user preference or something meaningful
+    important_keywords = ["name", "favorite", "interest", "preferences"]
+    
+    if any(keyword in prompt.lower() for keyword in important_keywords):
+        return True
+    return False
+
 # Chat function with memory
 def chat_with_gpt(prompt, user_id="default"):
     user_memory = memory.get(user_id, [])
@@ -54,11 +64,12 @@ def chat_with_gpt(prompt, user_id="default"):
         )
         reply = response.choices[0].message.content.strip()
 
-        # Save the latest conversation
-        user_memory.append(f"User: {prompt}")
-        user_memory.append(f"Assistant: {reply}")
-        memory[user_id] = user_memory
-        save_memory(memory)
+        # Save the latest conversation if it's deemed important
+        if should_save_message(prompt, user_id):
+            user_memory.append(f"User: {prompt}")
+            user_memory.append(f"Assistant: {reply}")
+            memory[user_id] = user_memory
+            save_memory(memory)
 
         return reply
 
@@ -71,7 +82,7 @@ def start_chat():
     print("Hi! I'm Blippy with memory now. Type 'quit' to exit.")
     user_id = input("What's your name? ")
     
-    # Save user name in memory
+    # Save user name in memory if it's not already saved
     if user_id not in memory:
         memory[user_id] = {"name": user_id, "chat_history": []}  # Store name and initialize empty chat history
         save_memory(memory)
