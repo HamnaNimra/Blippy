@@ -1,104 +1,47 @@
-from openai import OpenAI
 import os
 import json
 from dotenv import load_dotenv
+from openai import OpenAI
+from conversation import ConversationManager
+from emotions import EmotionDetector
+from topics import TopicSelector
+from jokes import JokeSharer
+from memory import MemoryManager
 
-# Load API key from .env
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Load or initialize memory
-def load_memory():
-    print("Loading memory...")  # Debugging message
-    if os.path.exists("memory.json"):
-        try:
-            with open("memory.json", "r") as file:
-                return json.load(file)
-        except json.JSONDecodeError:
-            print("Error decoding JSON from memory.json. Returning an empty memory.")
-            return {}
-    return {}
+def main():
+    conversation_manager = ConversationManager(client)
+    emotion_detector = EmotionDetector()
+    topic_selector = TopicSelector()
+    joke_sharer = JokeSharer()
+    memory_manager = MemoryManager()
 
-def save_memory(memory):
-    try:
-        with open("memory.json", "w") as file:
-            json.dump(memory, file, indent=4)
-            print("Memory saved successfully.")  # Debugging message
-    except IOError as e:
-        print(f"Error saving memory: {e}")
-    except Exception as e:
-        print(f"Unexpected error while saving memory: {e}")
-
-# Ensure memory is loaded at the start
-memory = load_memory()
-
-# AI Decision Logic for Saving Memory
-def should_save_message(prompt, user_id):
-    # Basic logic to decide whether to save the message
-    # For example, only save if the message is a user preference or something meaningful
-    important_keywords = ["name", "favorite", "interest", "preferences"]
-    
-    if any(keyword in prompt.lower() for keyword in important_keywords):
-        return True
-    return False
-
-# Chat function with memory
-def chat_with_gpt(prompt, user_id="default"):
-    user_memory = memory.get(user_id, [])
-    conversation_history = [{"role": "system", "content": "You are a helpful AI assistant."}]
-
-    # Add past conversation to the history
-    for i in user_memory[-5:]:  # Last 5 messages
-        role, content = i.split(":", 1)
-        conversation_history.append({"role": role.strip().lower(), "content": content.strip()})
-
-    # Add the new user input
-    conversation_history.append({"role": "user", "content": prompt})
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=conversation_history,
-            max_tokens=50,
-            temperature=0.7
-        )
-        reply = response.choices[0].message.content.strip()
-
-        # Save the latest conversation if it's deemed important
-        if should_save_message(prompt, user_id):
-            user_memory.append(f"User: {prompt}")
-            user_memory.append(f"Assistant: {reply}")
-            memory[user_id] = user_memory
-            save_memory(memory)
-
-        return reply
-
-    except Exception as e:
-        return f"Error: {e}"
-
-
-# Chat loop
-def start_chat():
-    print("Hi! I'm Blippy with memory now. Type 'quit' to exit.")
+    print("Hi! I'm Blippy with enhanced features. Type 'quit' to exit.")
     user_id = input("What's your name? ")
-    
-    # Save user name in memory if it's not already saved
-    if user_id not in memory:
-        memory[user_id] = {"name": user_id, "chat_history": []}  # Store name and initialize empty chat history
-        save_memory(memory)
-        print(f"Nice to meet you, {user_id}!")
+    memory_manager.load_memory(user_id)
 
-    # Adding functionality to ensure memory is saved even if no chat occurs
     while True:
         user_input = input("You: ")
         if user_input.lower() == "quit":
             print("Blippy: Bye! I'll remember this chat!")
-            save_memory(memory)  # Save memory before quitting
+            memory_manager.save_memory()
             break
-        response = chat_with_gpt(user_input, user_id)
+        elif user_input.lower() == "topics":
+            topic_selector.display_topics()
+            selected_topic = input("Choose a topic (or type 'back'): ")
+            if selected_topic.lower()!= "back":
+                user_input = topic_selector.get_topic_question(selected_topic)
+        
+        intents = conversation_manager.identify_intents(user_input)
+        response = conversation_manager.respond(intents, user_id, emotion_detector)
+        
+        if "joke" in intents or user_input.lower() == "joke":
+            response += "\n" + joke_sharer.share_joke()
+        
         print(f"Blippy: {response}")
+        memory_manager.save_conversation(user_id, user_input, response)
 
 if __name__ == "__main__":
-    # Check if the script can access the current directory and write to it
-    print(f"Current working directory: {os.getcwd()}")  # Debugging message
-    start_chat()
+    main()
