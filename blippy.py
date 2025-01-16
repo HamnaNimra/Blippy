@@ -1,108 +1,107 @@
+from openai import OpenAI
 import os
 import json
 from dotenv import load_dotenv
-from openai import OpenAI
-from conversation import ConversationManager
-from emotions import EmotionDetector
-from topics import TopicSelector
-from jokes import JokeSharer
-from memory import MemoryManager
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-from sklearn.naive_bayes import MultinomialNB
 
+# Load API key from .env
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ML Integration
-def train_model(df):
-    vectorizer = TfidfVectorizer()
-    X = vectorizer.fit_transform(df['user_input'])
-    y = df['intent']
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    model = MultinomialNB()
-    model.fit(X_train, y_train)
-    
-    y_pred = model.predict(X_test)
-    print("Model Accuracy:", accuracy_score(y_test, y_pred))
-    
-    return vectorizer, model
+# Load or initialize memory
+def load_memory():
+    print("Loading memory...")  # Debugging message
+    if os.path.exists("memory.json"):
+        try:
+            with open("memory.json", "r") as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            print("Error decoding JSON from memory.json. Returning an empty memory.")
+            return {}
+    return {}
 
-def predict_intent(vectorizer, model, user_input):
-    input_vec = vectorizer.transform([user_input])
-    predicted_intent = model.predict(input_vec)[0]
-    return predicted_intent
-
-# Feedback Mechanism
-def collect_feedback(user_id, user_input, response, correct):
-    feedback_data = {
-        'user_id': user_id,
-        'user_input': user_input,
-        'esponse': response,
-        'correct': correct
-    }
-    with open('feedback.json', 'a+') as f:
-        json.dump(feedback_data, f)
-        f.write('\n')
-
-def main():
-    conversation_manager = ConversationManager(client)
-    emotion_detector = EmotionDetector()
-    topic_selector = TopicSelector()
-    joke_sharer = JokeSharer()
-    memory_manager = MemoryManager()
-    
-    # Load existing feedback data for ML
+def save_memory(memory):
     try:
-        df = pd.read_json('feedback.json', lines=True)
-        vectorizer, ml_model = train_model(df)
-    except FileNotFoundError:
-        vectorizer, ml_model = None, None
-    
-    print("Hi! I'm Blippy with enhanced features. Type 'quit' to exit.")
-    user_id = input("What's your name? ")
-    memory_manager.load_memory(user_id)
+        with open("memory.json", "w") as file:
+            json.dump(memory, file, indent=4)
+            print("Memory saved successfully.")  # Debugging message
+    except IOError as e:
+        print(f"Error saving memory: {e}")
+    except Exception as e:
+        print(f"Unexpected error while saving memory: {e}")
 
+# Ensure memory is loaded at the start
+memory = load_memory()
+
+# AI Decision Logic for Saving Memory
+def should_save_message(prompt, user_id):
+    # Basic logic to decide whether to save the message
+    # For example, only save if the message is a user preference or something meaningful
+    important_keywords = ["name", "favorite", "interest", "preferences"]
+    
+    if any(keyword in prompt.lower() for keyword in important_keywords):
+        return True
+    return False
+
+# Chat function with memory
+# Chat function with memory
+def chat_with_gpt(prompt, user_id="default"):
+    user_info = memory.get(user_id, {"name": user_id, "chat_history": []})
+    user_memory = user_info["chat_history"]  # Always a list
+
+    # Add past conversation to the history
+    conversation_history = [{"role": "system", "content": "You are a helpful AI assistant."}]
+    for i in user_memory[-5:]:  # Last 5 messages
+        role, content = i.split(":", 1)
+        conversation_history.append({"role": role.strip().lower(), "content": content.strip()})
+
+    # Add the new user input
+    conversation_history.append({"role": "user", "content": prompt})
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=conversation_history,
+            max_tokens=50,
+            temperature=0.7
+        )
+        reply = response.choices[0].message.content.strip()
+
+        # Save the latest conversation if it's deemed important
+        if should_save_message(prompt, user_id):
+            user_memory.append(f"User: {prompt}")
+            user_memory.append(f"Assistant: {reply}")
+            user_info["chat_history"] = user_memory
+            memory[user_id] = user_info
+            save_memory(memory)
+
+        return reply
+
+    except Exception as e:
+        return f"Error: {e}"
+
+
+# Chat loop
+def start_chat():
+    print("Hi! I'm Blippy with memory now. Type 'quit' to exit.")
+    user_id = input("What's your name? ")
+    
+    # Save user name in memory if it's not already saved
+    if user_id not in memory:
+        memory[user_id] = {"name": user_id, "chat_history": []}  # Store name and initialize empty chat history
+        save_memory(memory)
+        print(f"Nice to meet you, {user_id}!")
+
+    # Adding functionality to ensure memory is saved even if no chat occurs
     while True:
         user_input = input("You: ")
         if user_input.lower() == "quit":
             print("Blippy: Bye! I'll remember this chat!")
-            memory_manager.save_memory()
+            save_memory(memory)  # Save memory before quitting
             break
-        elif user_input.lower() == "topics":
-            topic_selector.display_topics()
-            selected_topic = input("Choose a topic (or type 'back'): ")
-            if selected_topic.lower()!= "back":
-                user_input = topic_selector.get_topic_question(selected_topic)
-        
-        # Use ML model if available, else fallback to original intent identification
-        if ml_model:
-            predicted_intent = predict_intent(vectorizer, ml_model, user_input)
-            intents = [predicted_intent]
-        else:
-            intents = conversation_manager.identify_intents(user_input)
-        
-        response = conversation_manager.respond(intents, user_id, emotion_detector)
-        
-        if "joke" in intents or user_input.lower() == "joke":
-            response += "\n" + joke_sharer.share_joke()
-        
+        response = chat_with_gpt(user_input, user_id)
         print(f"Blippy: {response}")
-        
-        # Feedback Mechanism
-        feedback_correct = input("Was the response correct? (y/n): ")
-        collect_feedback(user_id, user_input, response, feedback_correct.lower() == 'y')
-        
-        memory_manager.save_conversation(user_id, user_input, response)
-        
-        # Periodically retrain the model with new feedback data
-        if vectorizer and len(pd.read_json('feedback.json', lines=True)) % 100 == 0:
-            df = pd.read_json('feedback.json', lines=True)
-            vectorizer, ml_model = train_model(df)
 
 if __name__ == "__main__":
-    main()
+    # Check if the script can access the current directory and write to it
+    print(f"Current working directory: {os.getcwd()}")  # Debugging message
+    start_chat()
